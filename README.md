@@ -51,7 +51,7 @@
 **Ensure you have a `Dockerfile` and `requirements.txt` in the root of the project.**
 
 ```bash
-git clone https://github.com/nzo66/EasyProxy.git
+git clone https://github.com/stremio-manager/EasyProxy.git
 cd EasyProxy
 docker build -t EasyProxy .
 docker run -d -p 7860:7860 --name EasyProxy EasyProxy
@@ -60,7 +60,7 @@ docker run -d -p 7860:7860 --name EasyProxy EasyProxy
 ### 🐍 Direct Python
 
 ```bash
-git clone https://github.com/nzo66/EasyProxy.git
+git clone https://github.com/stremio-manager/EasyProxy.git
 cd EasyProxy
 pip install -r requirements.txt
 python app.py
@@ -75,7 +75,7 @@ python app.py
 ### ▶️ Render
 
 1. **Projects** → **New → Web Service** → *Public Git Repository*
-2. **Repository**: `https://github.com/nzo66/EasyProxy`
+2. **Repository**: `https://github.com/stremio-manager/EasyProxy`
 3. **Build Command**: `pip install -r requirements.txt`
 4. **Start Command**: `gunicorn --bind 0.0.0.0:7860 --workers 4 --worker-class aiohttp.worker.GunicornWebWorker app:app`
 5. **Deploy**
@@ -101,7 +101,7 @@ heroku create EasyProxy && git push heroku main
 
 ### 🚀 Koyeb
 1. Create a new **Web Service** on Koyeb.
-2. Select **GitHub** as the source and enter the repository URL: `https://github.com/nzo66/EasyProxy`
+2. Select **GitHub** as the source and enter the repository URL: `https://github.com/stremio-manager/EasyProxy`
 3. Select Dockerfile
 4. Select CPU Eco - Free
 5. Go to **Environment variables**.
@@ -139,7 +139,7 @@ Optimized for:
 
 ```bash
 # Clone repository
-git clone https://github.com/nzo66/EasyProxy.git
+git clone https://github.com/stremio-manager/EasyProxy.git
 cd EasyProxy
 
 # Install dependencies
@@ -157,7 +157,7 @@ python app.py
 ```bash
 pkg update && pkg upgrade
 pkg install python git ffmpeg -y
-git clone https://github.com/nzo66/EasyProxy.git
+git clone https://github.com/stremio-manager/EasyProxy.git
 cd EasyProxy
 pkg install clang libxml2 libxslt python
 pip install --upgrade pip setuptools wheel
