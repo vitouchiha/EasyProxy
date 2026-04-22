@@ -549,7 +549,8 @@ class HLSProxy:
 
             connector = TCPConnector(**connector_kwargs)
             session = aiohttp.ClientSession(
-                timeout=ClientTimeout(total=30), connector=connector
+                timeout=ClientTimeout(total=None, connect=30, sock_connect=30, sock_read=None),
+                connector=connector,
             )
             setattr(self, target_attr, session)
         return session
@@ -647,7 +648,7 @@ class HLSProxy:
                     family=socket.AF_INET,  # Force IPv4
                     rdns=rdns,
                 )
-                timeout = ClientTimeout(total=30)
+                timeout = ClientTimeout(total=None, connect=30, sock_connect=30, sock_read=None)
                 session = ClientSession(timeout=timeout, connector=connector)
                 self.proxy_sessions[proxy] = session  # Cache the session
                 return session, proxy  # Return proxy URL for logging
