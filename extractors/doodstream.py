@@ -41,6 +41,28 @@ class DoodStreamExtractor:
     def _get_proxy(self, url: str) -> str | None:
         return get_proxy_for_url(url, TRANSPORT_ROUTES, GLOBAL_PROXIES)
 
+    async def _fetch_embed_html(
+        self, embed_url: str, cookies: dict | None = None, ua: str | None = None
+    ) -> tuple[str, str]:
+        proxy = self._get_proxy(embed_url)
+        current_ua = ua or _DOOD_UA
+        async with AsyncSession() as s:
+            r = await s.get(
+                embed_url,
+                impersonate="chrome",
+                headers={
+                    "Referer": f"https://{urlparse(embed_url).netloc}/",
+                    "User-Agent": current_ua,
+                },
+                cookies=cookies or {},
+                timeout=30,
+                allow_redirects=True,
+                **({"proxy": proxy} if proxy else {}),
+            )
+        html = r.text
+        base_url = f"https://{urlparse(str(r.url)).netloc}"
+        return html, base_url
+
     async def extract(self, url: str, **kwargs):
         parsed = urlparse(url)
         video_id = parsed.path.rstrip("/").split("/")[-1]
@@ -60,8 +82,8 @@ class DoodStreamExtractor:
             try:
                 return await self._extract_via_byparr(url, video_id)
             except ExtractorError as e:
-                logger.error(f"DoodStream: Byparr extraction failed: {e}")
-                raise
+                logger.warning(f"DoodStream: Byparr extraction failed: {e}")
+                logger.info("DoodStream: Falling back to curl_cffi extraction after Byparr failure")
 
         return await self._extract_via_curl_cffi(url, video_id)
 
@@ -119,28 +141,29 @@ class DoodStreamExtractor:
             self.cache.set(urlparse(url).netloc, cookies, ua)
 
         if "pass_md5" not in html:
-             if any(x in html.lower() for x in ["video not found", "video non trovato", "removed", "eliminato", "not found"]):
-                 raise ExtractorError("DoodStream: Video not found (deleted or invalid URL)")
-             logger.error(f"DoodStream: Byparr returned HTML without pass_md5. Snippet: {html[:500]}...")
-             raise ExtractorError("DoodStream: Byparr failed to solve the challenge correctly (pass_md5 not found)")
+            if any(x in html.lower() for x in ["video not found", "video non trovato", "removed", "eliminato", "not found"]):
+                raise ExtractorError("DoodStream: Video not found (deleted or invalid URL)")
+
+            if cookies:
+                logger.info("DoodStream: Byparr returned cookies but no pass_md5, retrying embed fetch with solved session")
+                retried_html, retried_base_url = await self._fetch_embed_html(
+                    final_url, cookies=cookies, ua=ua
+                )
+                if "pass_md5" in retried_html:
+                    return await self._parse_embed_html(
+                        retried_html, retried_base_url, ua, use_byparr=True, cookies=cookies
+                    )
+                html = retried_html
+                base_url = retried_base_url
+
+            logger.warning(f"DoodStream: Byparr returned HTML without pass_md5. Snippet: {html[:500]}...")
+            raise ExtractorError("DoodStream: Byparr failed to solve the challenge correctly (pass_md5 not found)")
 
         return await self._parse_embed_html(html, base_url, ua, use_byparr=True, cookies=cookies)
 
     async def _extract_via_curl_cffi(self, url: str, video_id: str, cookies: dict = None, ua: str = None) -> dict:
-        proxy = self._get_proxy(url)
+        html, base_url = await self._fetch_embed_html(url, cookies=cookies, ua=ua)
         current_ua = ua or _DOOD_UA
-        async with AsyncSession() as s:
-            r = await s.get(
-                url,
-                impersonate="chrome",
-                headers={"Referer": f"https://{urlparse(url).netloc}/", "User-Agent": current_ua},
-                cookies=cookies or {},
-                timeout=30,
-                allow_redirects=True,
-                **({"proxy": proxy} if proxy else {}),
-            )
-        html = r.text
-        base_url = f"https://{urlparse(str(r.url)).netloc}"
 
         if "pass_md5" not in html:
             if "turnstile" in html.lower() or "captcha_l" in html:
