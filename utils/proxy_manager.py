@@ -99,49 +99,79 @@ class FreeProxyManager:
 
     async def get_proxies(self, probe_func: Callable[[str], Any], force_refresh: bool = False) -> List[str]:
         now = time.time()
-        if not force_refresh and self.proxies and self.expires_at > now:
+        
+        # Se abbiamo già dei proxy e non sono scaduti, ma ne vogliamo "di più" per la rotazione,
+        # continuiamo solo se il pool è piccolo (es. < 50) per evitare check infiniti.
+        should_find_more = len(self.proxies) < 50 and not force_refresh
+        
+        if not force_refresh and self.proxies and self.expires_at > now and not should_find_more:
             return list(self.proxies)
 
         async with self._refresh_lock:
-            # Ri-controllo dopo il lock
-            if not force_refresh and self.proxies and self.expires_at > time.time():
+            # Controllo se nel frattempo un altro task ha aggiornato
+            if not force_refresh and self.proxies and self.expires_at > time.time() and len(self.proxies) >= 50:
                 return list(self.proxies)
 
-            logger.info(f"ProxyManager[{self.name}]: Refreshing proxy pool (Early Return Mode)...")
-            candidates = await self._fetch_candidates()
-            if not candidates:
+            logger.info(f"ProxyManager[{self.name}]: Incremental validation (+2 proxies)...")
+            
+            # Se la cache è scaduta o forziamo, resettiamo tutto
+            if force_refresh or self.expires_at <= time.time():
+                self.proxies = []
+                self.expires_at = time.time() + self.cache_ttl
+                self._candidates_cache = await self._fetch_candidates()
+            
+            if not hasattr(self, '_candidates_cache') or not self._candidates_cache:
+                self._candidates_cache = await self._fetch_candidates()
+
+            if not self._candidates_cache:
                 return list(self.proxies)
 
-            good = []
-            semaphore = asyncio.Semaphore(100)
+            # Prendiamo i candidati che non abbiamo ancora testato in questo ciclo
+            if not hasattr(self, '_tested_indices'):
+                self._tested_indices = set()
+            
+            remaining = [c for i, c in enumerate(self._candidates_cache) if i not in self._tested_indices]
+            if not remaining:
+                # Abbiamo finito i candidati, resettiamo il set per ricominciare se serve
+                self._tested_indices = set()
+                remaining = self._candidates_cache
+
+            good_this_round = []
+            semaphore = asyncio.Semaphore(50) # Meno concorrenza per check incrementali
             ready_event = asyncio.Event()
             
-            # Funzione interna per completare il lavoro in background
-            async def background_validator():
-                tasks = [self._probe_proxy_worker(c, probe_func, semaphore, good, ready_event) for c in candidates]
-                await asyncio.gather(*tasks)
-                if good:
-                    self.proxies = good
-                    self.expires_at = time.time() + self.cache_ttl
-                    logger.info(f"ProxyManager[{self.name}]: Background validation finished. Total good: {len(good)}")
-                ready_event.set() # Assicura che get_proxies non resti appeso se finisce tutto prima dei 3 proxy
+            # Tasks per questa tornata
+            tasks = []
+            for i, candidate in enumerate(remaining):
+                # Usiamo una funzione wrapper per segnare l'indice come testato
+                async def test_and_mark(c=candidate, idx=i):
+                    await self._probe_proxy_worker(c, probe_func, semaphore, good_this_round, ready_event)
+                    self._tested_indices.add(idx)
 
-            # Avvia la validazione in background
-            bg_task = asyncio.create_task(background_validator())
-            
-            # Aspetta i primi 3 proxy o un timeout di 5 secondi per la prima risposta
+                tasks.append(asyncio.create_task(test_and_mark()))
+
+            # Aspetta finché non ne troviamo 2 NUOVI o finché non finiscono i tasks
             try:
-                if not good or len(good) < 3:
-                    await asyncio.wait_for(ready_event.wait(), timeout=5.0)
-            except asyncio.TimeoutError:
-                logger.debug(f"ProxyManager[{self.name}]: Early return timeout reached, returning {len(good)} proxies found so far.")
+                # Controlliamo ogni secondo se ne abbiamo trovati 2
+                while len(good_this_round) < 2:
+                    # Se tutti i task sono finiti, usciamo
+                    if all(t.done() for t in tasks):
+                        break
+                    await asyncio.sleep(0.5)
+            except Exception:
+                pass
+            finally:
+                # FERMA TUTTO: Cancella i task rimanenti per non sprecare CPU
+                for t in tasks:
+                    if not t.done():
+                        t.cancel()
 
-            # Se abbiamo trovato qualcosa, restituiamo subito
-            if good:
-                return list(good)
+            if good_this_round:
+                for p in good_this_round:
+                    if p not in self.proxies:
+                        self.proxies.append(p)
+                logger.info(f"ProxyManager[{self.name}]: Found {len(good_this_round)} new proxies. Total pool: {len(self.proxies)}")
             
-            # Se proprio non abbiamo trovato nulla nei primi secondi, aspettiamo il task di background (o finché non ne arriva uno)
-            await bg_task
             return list(self.proxies)
 
     async def get_next_sequence(self, probe_func: Callable[[str], Any]) -> List[str]:
