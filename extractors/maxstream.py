@@ -61,6 +61,7 @@ class MaxstreamExtractor:
         self.session = None
         self.mediaflow_endpoint = "hls_proxy"
         self.proxies = proxies or []
+        self.cookies = {} # Persistent cookies for the session
         self.resolver = StaticResolver()
         self.proxy_manager = FreeProxyManager.get_instance(
             "maxstream",
@@ -200,6 +201,10 @@ class MaxstreamExtractor:
 
             session = await self._get_session(proxy=proxy)
             try:
+                # Add current cookies to kwargs for aiohttp
+                if self.cookies:
+                    kwargs["cookies"] = self.cookies
+                
                 async with session.request(method, url, ssl=False, **kwargs) as response:
                     if response.status < 400:
                         if is_binary:
@@ -208,17 +213,30 @@ class MaxstreamExtractor:
                             return content
                         text = await response.text()
                         
+                        # Update persistent cookies
+                        for k, v in response.cookies.items():
+                            self.cookies[k] = v.value
+                        
                         # Check for Cloudflare challenge in successful response
                         if any(marker in text.lower() for marker in ["cf-challenge", "ray id", "checking your browser"]):
                             # Fallback to the global smart_request utility
                             if proxy: await session.close()
                             fs_cmd = f"request.{method.lower()}"
-                            # Pass the current proxy to FlareSolverr if it exists, otherwise use self.proxies
+                            # Pass the current proxy and cookies
                             fs_proxies = [proxy] if proxy else self.proxies
-                            result = await smart_request(fs_cmd, url, headers=kwargs.get("headers"), post_data=kwargs.get("data"), proxies=fs_proxies)
-                            html = result.get("html", "") if isinstance(result, dict) else result
-                            if html:
-                                return html
+                            
+                            # Add existing cookies to headers for smart_request to pick up
+                            fs_headers = kwargs.get("headers", {}).copy()
+                            if self.cookies:
+                                fs_headers["Cookie"] = "; ".join([f"{k}={v}" for k, v in self.cookies.items()])
+
+                            result = await smart_request(fs_cmd, url, headers=fs_headers, post_data=kwargs.get("data"), proxies=fs_proxies)
+                            
+                            if isinstance(result, dict):
+                                self.cookies.update(result.get("cookies", {}))
+                                html = result.get("html", "")
+                                if html: return html
+                            
                             logger.warning(f"FlareSolverr failed for {url} on this path, trying next path...")
                             continue
 
@@ -229,12 +247,20 @@ class MaxstreamExtractor:
                         logger.warning(f"HTTP {response.status} on {url}, checking with FlareSolverr...")
                         if proxy: await session.close()
                         fs_cmd = f"request.{method.lower()}"
-                        # Pass the current proxy to FlareSolverr if it exists, otherwise use self.proxies
+                        # Pass the current proxy and cookies
                         fs_proxies = [proxy] if proxy else self.proxies
-                        result = await smart_request(fs_cmd, url, headers=kwargs.get("headers"), post_data=kwargs.get("data"), proxies=fs_proxies)
-                        html = result.get("html", "") if isinstance(result, dict) else result
-                        if html:
-                            return html
+                        
+                        fs_headers = kwargs.get("headers", {}).copy()
+                        if self.cookies:
+                            fs_headers["Cookie"] = "; ".join([f"{k}={v}" for k, v in self.cookies.items()])
+
+                        result = await smart_request(fs_cmd, url, headers=fs_headers, post_data=kwargs.get("data"), proxies=fs_proxies)
+                        
+                        if isinstance(result, dict):
+                            self.cookies.update(result.get("cookies", {}))
+                            html = result.get("html", "")
+                            if html: return html
+                            
                         logger.warning(f"FlareSolverr failed for {url} on this path, trying next path...")
                         continue
                     else:
@@ -313,6 +339,7 @@ class MaxstreamExtractor:
         logger.debug(f"Captcha solved: {res}")
         
         # Prepare form action
+        from urllib.parse import urlencode
         if not form_action or form_action == "#":
             form_action = original_url
         elif form_action.startswith("/"):
@@ -341,7 +368,8 @@ class MaxstreamExtractor:
         
         logger.debug(f"Submitting captcha to: {form_action} with data: {post_data}")
         headers = {**self.base_headers, "referer": original_url}
-        solved_text = await self._smart_request(form_action, method="POST", data=post_data, headers=headers)
+        # Use urlencode for FlareSolverr compatibility and pass cookies
+        solved_text = await self._smart_request(form_action, method="POST", data=urlencode(post_data), headers=headers)
         
         # Try to parse the new page
         try:
