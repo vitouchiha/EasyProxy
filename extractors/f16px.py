@@ -97,32 +97,36 @@ class F16PxExtractor(BaseExtractor):
 
         # ✅ FIX: correct endpoint
         api_url = f"https://{host}/api/videos/{media_id}/embed/playback"
+        embed_url = f"{origin}/e/{media_id}"
 
         headers = self.base_headers.copy()
-        headers["referer"] = f"{origin}/"
-        headers["origin"] = origin
-        headers["content-type"] = "application/json"
-        headers["user-agent"] = self.F16PX_USER_AGENT
+        headers.update({
+            "Accept": "application/json, text/plain, */*",
+            "Content-Type": "application/json",
+            "Origin": origin,
+            "Referer": embed_url,
+            "User-Agent": self.F16PX_USER_AGENT,
+            "X-Embed-Origin": host,
+            "X-Embed-Referer": embed_url,
+            "X-Embed-Parent": origin,
+        })
 
-        # ✅ Try POST (modern API)
         try:
             resp = await self._make_request(
                 api_url,
                 headers=headers,
                 method="POST",
+                retries=1,
                 json=self._make_fingerprint_payload()
             )
             data = json.loads(resp.text)
-        except Exception:
-            data = {}
+        except json.JSONDecodeError:
+            raise ExtractorError("F16PX: Invalid JSON response")
+        except ExtractorError:
+            raise
 
-        # ✅ Fallback to GET if POST fails
-        if not data or (not data.get("sources") and not data.get("playback")):
-            resp = await self._make_request(api_url, headers=headers)
-            try:
-                data = json.loads(resp.text)
-            except Exception:
-                raise ExtractorError("F16PX: Invalid JSON response")
+        if not data:
+            raise ExtractorError("F16PX: Empty playback response")
 
         # Case 1: plain sources
         if data.get("sources"):
