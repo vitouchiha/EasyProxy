@@ -208,21 +208,18 @@ class VixSrcExtractor:
 
                 if e.status == 403 and attempt == retries - 1:
                     try:
-                        from curl_cffi import requests as cffi_requests
+                        from curl_cffi.requests import AsyncSession as CurlAsyncSession
                         logger.info("aiohttp 403, trying curl_cffi for %s", url)
                         headers_403 = final_headers or self._default_headers()
-                        loop = asyncio.get_running_loop()
-                        def _cffi_req():
-                            resp = cffi_requests.get(
+                        async with CurlAsyncSession(impersonate="chrome131") as session:
+                            resp = await session.get(
                                 url,
                                 headers=headers_403,
-                                impersonate="chrome131",
                                 timeout=30,
                                 allow_redirects=True,
-                                verify=False,
                             )
-                            return resp.status_code, resp.text, dict(resp.cookies) if resp.cookies else {}
-                        status_403, text_403, cookies_403 = await loop.run_in_executor(None, _cffi_req)
+                            status_403 = resp.status_code
+                            text_403 = resp.text
                         if status_403 == 200 and text_403:
                             logger.info("curl_cffi success for %s", url)
                             class MockResponse:
