@@ -35,6 +35,7 @@ class VixSrcExtractor:
         self.last_used_proxy = None
         self.flaresolverr_url = FLARESOLVERR_URL
         self.flaresolverr_timeout = FLARESOLVERR_TIMEOUT
+        self._fs_cookies = ""
     @staticmethod
     def _normalize_proxy_url(proxy_value: str) -> str:
         proxy_value = proxy_value.strip()
@@ -191,9 +192,11 @@ class VixSrcExtractor:
         solution = result.get("solution", {})
         html = solution.get("response", "")
 
-        # Build Cookie string from FlareSolverr cookies
+        # Build Cookie string from FlareSolverr cookies and store for proxy use
         fs_cookies = solution.get("cookies", [])
         cookie_str = "; ".join(f"{c['name']}={c['value']}" for c in fs_cookies if c.get("name") and c.get("value"))
+        if cookie_str:
+            self._fs_cookies = cookie_str
 
         def _make_resp(text_content, status_code):
             class _Mock:
@@ -742,6 +745,8 @@ class VixSrcExtractor:
                 raise ExtractorError("No playlist data found in response, and embed URL has no token/expires")
 
             stream_headers = self._fresh_headers(Referer=url)
+            if self._fs_cookies:
+                stream_headers["Cookie"] = self._fs_cookies
             logger.info("VixSrc URL extracted successfully: %s", final_url)
             return {
                 "destination_url": final_url,
