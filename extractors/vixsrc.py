@@ -518,7 +518,21 @@ class VixSrcExtractor:
 
         fs_proxy = forced_proxy or await self._preferred_proxy(url)
         if fs_proxy:
-            payload["proxy"] = {"url": get_solver_proxy_url(fs_proxy)}
+            proxy_url = get_solver_proxy_url(fs_proxy)
+            proxy_obj = {"url": proxy_url}
+            if "@" in proxy_url:
+                try:
+                    from urllib.parse import urlparse as _pp
+                    pp = _pp(proxy_url)
+                    if pp.username and pp.password:
+                        proxy_obj["username"] = pp.username
+                        proxy_obj["password"] = pp.password
+                        proxy_obj["url"] = f"{pp.scheme}://{pp.hostname}"
+                        if pp.port:
+                            proxy_obj["url"] += f":{pp.port}"
+                except Exception:
+                    pass
+            payload["proxy"] = proxy_obj
 
         cookie_header = (headers or {}).get("Cookie") or (headers or {}).get("cookie")
         if cookie_header:
