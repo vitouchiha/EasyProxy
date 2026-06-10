@@ -646,6 +646,7 @@ class VixSrcExtractor:
                 raise ExtractorError(f"VixSrc API fetch failed: {robust_err}") from robust_err
 
         try:
+            logger.debug("VixSrc API raw response (first 500): %s", response.text[:500])
             payload = json.loads(response.text)
         except json.JSONDecodeError:
             text = None
