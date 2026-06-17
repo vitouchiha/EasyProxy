@@ -5,97 +5,6 @@ import asyncio
 import aiohttp
 from aiohttp import web
 
-# Monkey-patch aiohttp ClientSession to count upstream response bytes
-# for the admin network speed widget (download = fetched for clients).
-def _patch_client_session_for_upstream_bytes():
-    try:
-        from config import record_proxy_net_recv
-    except Exception:
-        return
-
-    _trace = aiohttp.TraceConfig()
-    _trace._easyproxy_upstream = True
-
-    async def _on_chunk(session, trace_config_ctx, params):
-        try:
-            chunk = getattr(params, 'chunk', None)
-            if chunk:
-                record_proxy_net_recv(len(chunk))
-        except Exception:
-            pass
-
-    _trace.on_response_chunk_received.append(_on_chunk)
-    _orig_init = aiohttp.ClientSession.__init__
-
-    def _patched_init(self, *args, **kwargs):
-        trace_configs = list(kwargs.get('trace_configs') or [])
-        if not any(getattr(tc, '_easyproxy_upstream', False) for tc in trace_configs):
-            trace_configs.append(_trace)
-            kwargs['trace_configs'] = trace_configs
-        return _orig_init(self, *args, **kwargs)
-
-    aiohttp.ClientSession.__init__ = _patched_init
-
-_patch_client_session_for_upstream_bytes()
-
-
-# Monkey-patch curl_cffi Response to count upstream response bytes.
-# This covers extractors and any other code that uses curl_cffi instead of aiohttp.
-def _patch_curl_cffi_for_upstream_bytes():
-    try:
-        from curl_cffi.requests.models import Response
-        from config import record_proxy_net_recv
-    except Exception:
-        return
-
-    # .content property
-    _orig_content_getter = Response.content.fget
-
-    @property
-    def _content(self):
-        data = _orig_content_getter(self)
-        if data:
-            record_proxy_net_recv(len(data))
-        return data
-
-    Response.content = _content
-
-    # async full content read
-    _orig_acontent = Response.acontent
-
-    async def _acontent(self, *args, **kwargs):
-        data = await _orig_acontent(self, *args, **kwargs)
-        if data:
-            record_proxy_net_recv(len(data))
-        return data
-
-    Response.acontent = _acontent
-
-    # async streaming iterator
-    _orig_aiter_content = Response.aiter_content
-
-    async def _aiter_content(self, *args, **kwargs):
-        async for chunk in _orig_aiter_content(self, *args, **kwargs):
-            if chunk:
-                record_proxy_net_recv(len(chunk))
-            yield chunk
-
-    Response.aiter_content = _aiter_content
-
-    # sync streaming iterator (if used anywhere)
-    _orig_iter_content = Response.iter_content
-
-    def _iter_content(self, *args, **kwargs):
-        for chunk in _orig_iter_content(self, *args, **kwargs):
-            if chunk:
-                record_proxy_net_recv(len(chunk))
-            yield chunk
-
-    Response.iter_content = _iter_content
-
-
-_patch_curl_cffi_for_upstream_bytes()
-
 # Configura logging PRIMA di qualsiasi import che possa emettere log
 logging.basicConfig(
     level=logging.INFO,
@@ -107,49 +16,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from services.proxy import HLSProxy
 from services.ffmpeg_manager import FFmpegManager
-from config import PORT, RECORDINGS_DIR, APP_VERSION, record_proxy_net_sent
+from config import PORT, RECORDINGS_DIR, APP_VERSION
 from services.recording_manager import RecordingManager
 from routes.recordings import setup_recording_routes
 
 logger = logging.getLogger(__name__)
-
-@web.middleware
-async def proxy_net_middleware(request, handler):
-    """Count bytes sent by EasyProxy to clients for the network speed widget.
-    Upstream bytes (what EasyProxy downloads for clients) are counted via an
-    aiohttp trace config injected into all ClientSession instances."""
-    response = await handler(request)
-
-    try:
-        if isinstance(response, web.Response) and response.body is not None:
-            body = response.body
-            size = 0
-            if isinstance(body, (bytes, bytearray, memoryview)):
-                size = len(body)
-            elif isinstance(body, str):
-                size = len(body.encode('utf-8'))
-            elif hasattr(body, 'size'):
-                size = int(body.size)
-            if size > 0:
-                record_proxy_net_sent(size)
-        elif isinstance(response, web.FileResponse):
-            size = response.body_length or 0
-            if size > 0:
-                record_proxy_net_sent(size)
-        elif isinstance(response, web.StreamResponse):
-            orig_write = response.write
-            async def counted_write(chunk, *args, **kwargs):
-                if chunk:
-                    if isinstance(chunk, (bytes, bytearray, memoryview)):
-                        record_proxy_net_sent(len(chunk))
-                    elif isinstance(chunk, str):
-                        record_proxy_net_sent(len(chunk.encode('utf-8')))
-                return await orig_write(chunk, *args, **kwargs)
-            response.write = counted_write
-    except Exception:
-        pass
-
-    return response
 
 def _read_file(path):
     """Helper for async file reading via run_in_executor."""
@@ -167,7 +38,7 @@ def create_app():
 
     proxy = HLSProxy(ffmpeg_manager=ffmpeg_manager)
 
-    app = web.Application(middlewares=[proxy_net_middleware])
+    app = web.Application()
     app['ffmpeg_manager'] = ffmpeg_manager # Make accessible for routes
     app.ffmpeg_manager = ffmpeg_manager # Hack for access in route handler above function
     app['proxy'] = proxy

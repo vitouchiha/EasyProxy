@@ -410,7 +410,7 @@
             <div class="resource-grid">
                 <div class="resource-item">
                     <div class="resource-header">
-                        <div class="resource-name">CPU Usage</div>
+                        <div class="resource-name">CPU Usage (EasyProxy)</div>
                         <div class="resource-val" id="cpu-percent">0%</div>
                     </div>
                     <div class="progress-bar-container">
@@ -419,7 +419,7 @@
                 </div>
                 <div class="resource-item">
                     <div class="resource-header">
-                        <div class="resource-name">RAM Usage</div>
+                        <div class="resource-name">RAM Usage (EasyProxy)</div>
                         <div class="resource-val" id="ram-percent">0%</div>
                     </div>
                     <div class="progress-bar-container">
@@ -429,7 +429,7 @@
                 </div>
                 <div class="resource-item">
                     <div class="resource-header">
-                        <div class="resource-name">Disk Space (DVR)</div>
+                        <div class="resource-name">Disk Space (System)</div>
                         <div class="resource-val" id="disk-percent">0%</div>
                     </div>
                     <div class="progress-bar-container">
@@ -440,7 +440,7 @@
                 <div class="resource-item speedtest-row">
                     <div class="speedtest-info">
                         <div class="resource-header" style="flex-direction:column;align-items:flex-start;gap:2px">
-                            <div class="resource-name">Network Speed</div>
+                            <div class="resource-name">Network Speed (System)</div>
                             <div class="resource-val" id="net-speed" style="font-size:0.85rem">—</div>
                         </div>
                         <div style="display:flex;gap:1rem;margin-top:4px;font-size:0.75rem;color:var(--text-muted)">
@@ -788,11 +788,9 @@ async function loadConfig() {
             document.getElementById('disk-details').textContent = `${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)} (Free: ${formatBytes(stats.disk.free)})`;
         }
 
-        // Network speed (EasyProxy traffic only)
-        // proxy_net.recv = data downloaded by EasyProxy from upstream
-        // proxy_net.sent = data uploaded by EasyProxy to clients
-        if (config.system_stats && config.system_stats.proxy_net) {
-            const net = config.system_stats.proxy_net;
+        // Network speed
+        if (config.system_stats && config.system_stats.net) {
+            const net = config.system_stats.net;
             document.getElementById('net-down').textContent = formatSpeed(net.recv);
             document.getElementById('net-up').textContent = formatSpeed(net.sent);
             document.getElementById('net-speed').textContent = formatSpeed(net.recv + net.sent) + ' total';
@@ -1296,10 +1294,8 @@ setInterval(async () => {
                 document.getElementById('disk-bar').style.width = stats.disk.percent + '%';
                 document.getElementById('disk-details').textContent = `${formatBytes(stats.disk.used)} / ${formatBytes(stats.disk.total)} (Free: ${formatBytes(stats.disk.free)})`;
             }
-            // proxy_net.recv = data downloaded by EasyProxy from upstream
-            // proxy_net.sent = data uploaded by EasyProxy to clients
-            if (tempConfig.system_stats && tempConfig.system_stats.proxy_net) {
-                const net = tempConfig.system_stats.proxy_net;
+            if (tempConfig.system_stats && tempConfig.system_stats.net) {
+                const net = tempConfig.system_stats.net;
                 document.getElementById('net-down').textContent = formatSpeed(net.recv);
                 document.getElementById('net-up').textContent = formatSpeed(net.sent);
                 document.getElementById('net-speed').textContent = formatSpeed(net.recv + net.sent) + ' total';

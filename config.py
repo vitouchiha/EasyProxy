@@ -7,7 +7,6 @@ import time
 import asyncio
 import contextvars
 import urllib.request
-import threading
 from dotenv import load_dotenv
 from config_store import get as _cfg_get, set as _cfg_set, get_all as _cfg_get_all
 
@@ -15,42 +14,6 @@ APP_VERSION = "2.9.22"
 
 _proxy_source_cache: dict[str, tuple[float, list]] = {}
 _PROXY_SOURCE_TTL = 600
-
-# Proxy-specific network counters (EasyProxy traffic only)
-_proxy_net_lock = threading.Lock()
-_proxy_net = {"sent": 0, "recv": 0}
-_proxy_net_prev = {"sent": 0, "recv": 0, "ts": 0}
-
-def record_proxy_net_sent(bytes_count: int):
-    if bytes_count <= 0:
-        return
-    with _proxy_net_lock:
-        _proxy_net["sent"] += bytes_count
-
-def record_proxy_net_recv(bytes_count: int):
-    if bytes_count <= 0:
-        return
-    with _proxy_net_lock:
-        _proxy_net["recv"] += bytes_count
-
-def get_proxy_net_rates():
-    with _proxy_net_lock:
-        now = time.time()
-        sent = _proxy_net["sent"]
-        recv = _proxy_net["recv"]
-        prev = _proxy_net_prev
-        if prev["ts"] and now - prev["ts"] > 0:
-            dt = now - prev["ts"]
-            sent_rate = max(0, (sent - prev["sent"]) / dt)
-            recv_rate = max(0, (recv - prev["recv"]) / dt)
-        else:
-            sent_rate = 0.0
-            recv_rate = 0.0
-        prev["sent"] = sent
-        prev["recv"] = recv
-        prev["ts"] = now
-    return {"sent": round(sent_rate, 1), "recv": round(recv_rate, 1)}
-
 
 def get_extractor_proxies(extractor_name: str) -> list:
     """Returns proxies from config_store for the given extractor.
@@ -1082,7 +1045,6 @@ def get_system_stats():
     except Exception:
         pass
 
-    proxy_net = get_proxy_net_rates()
     return {
         "disk": {
             "total": disk_total,
@@ -1111,7 +1073,6 @@ def get_system_stats():
         "net": {
             "sent": round(net_sent, 1),
             "recv": round(net_recv, 1)
-        },
-        "proxy_net": proxy_net
+        }
     }
 
