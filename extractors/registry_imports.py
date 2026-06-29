@@ -24,13 +24,12 @@ logger = logging.getLogger("extractors.registry")
     LuluStreamExtractor,
 ) = None, None, None, None, None
 (
-    MaxstreamExtractor,
     OkruExtractor,
     StreamWishExtractor,
     SupervideoExtractor,
     UqloadExtractor,
     DroploadExtractor,
-) = None, None, None, None, None, None
+) = None, None, None, None, None
 (
     VidmolyExtractor,
     VidozaExtractor,
@@ -40,11 +39,7 @@ logger = logging.getLogger("extractors.registry")
     Sports99Extractor,
 ) = None, None, None, None, None, None
 DLStreamsExtractor = None
-EmbedSportsExtractor = None
 StreamHGExtractor = None
-CinemaCityExtractor = None
-AdnExtractor = None
-DeltabitExtractor = None
 VidXgoExtractor = None
 
 
@@ -128,11 +123,7 @@ try:
 except ImportError:
     logger.warning("⚠️ LuluStreamExtractor module not found.")
 
-try:
-    from extractors.maxstream import MaxstreamExtractor
-    logger.info("✅ MaxstreamExtractor module loaded.")
-except ImportError:
-    logger.warning("⚠️ MaxstreamExtractor module not found.")
+
 
 try:
     from extractors.okru import OkruExtractor
@@ -219,32 +210,6 @@ except Exception as e:
     logger.warning("⚠️ DLStreamsExtractor failed to load: %s", e)
     DLStreamsExtractor = None
 
-try:
-    from extractors.embedsports import EmbedSportsExtractor
-    logger.info("✅ EmbedSportsExtractor module loaded.")
-except Exception as e:
-    logger.warning("⚠️ EmbedSportsExtractor failed to load: %s", e)
-    EmbedSportsExtractor = None
-
-try:
-    from extractors.cinemacity import CinemaCityExtractor
-    logger.info("✅ CinemaCityExtractor module loaded.")
-except Exception as e:
-    logger.warning("⚠️ CinemaCityExtractor module not found or failed to load: %s", e)
-    CinemaCityExtractor = None
-
-try:
-    from extractors.adn import AdnExtractor
-    logger.info("✅ AdnExtractor module loaded.")
-except Exception as e:
-    logger.warning("⚠️ AdnExtractor module not found or failed to load: %s", e)
-    AdnExtractor = None
-
-try:
-    from extractors.deltabit import DeltabitExtractor
-    logger.info("✅ DeltabitExtractor module loaded.")
-except ImportError:
-    logger.warning("⚠️ DeltabitExtractor module not found.")
 
 __all__ = [
     "VavooExtractor",
@@ -260,7 +225,6 @@ __all__ = [
     "FileLionsExtractor",
     "FileMoonExtractor",
     "LuluStreamExtractor",
-    "MaxstreamExtractor",
     "OkruExtractor",
     "StreamWishExtractor",
     "SupervideoExtractor",
@@ -273,10 +237,6 @@ __all__ = [
     "F16PxExtractor",
     "Sports99Extractor",
     "DLStreamsExtractor",
-    "EmbedSportsExtractor",
     "StreamHGExtractor",
-    "CinemaCityExtractor",
-    "AdnExtractor",
-    "DeltabitExtractor",
     "VidXgoExtractor",
 ]

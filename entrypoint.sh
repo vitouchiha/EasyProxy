@@ -103,21 +103,6 @@ if [ "$WARP_MODE" = "wireproxy" ]; then
 fi
     fi
 
-# Start Xvfb virtual display
-echo "Starting Xvfb on display :99..."
-Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset > /dev/null 2>&1 &
-export DISPLAY=:99
-
-# Start fluxbox lightweight WM (needed for pyautogui window focus)
-echo "Starting fluxbox WM..."
-fluxbox > /dev/null 2>&1 &
-
-# Wait for Xvfb and fluxbox to be fully initialized
-echo "Waiting for Xvfb and fluxbox to initialize..."
-sleep 3
-
-echo "Camoufox (Playwright Firefox) will run under Xvfb display :99 (on-demand via Python)"
-
 echo "Starting EasyProxy..."
 cd /app
 WORKERS_COUNT=${WORKERS:-1}

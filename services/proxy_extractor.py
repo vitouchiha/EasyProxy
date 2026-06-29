@@ -81,7 +81,6 @@ class HLSProxyExtractorHandlerMixin:
                         "filelions",
                         "filemoon",
                         "lulustream",
-                        "maxstream",
                         "okru",
                         "streamwish",
                         "streamhg",
@@ -92,7 +91,6 @@ class HLSProxyExtractorHandlerMixin:
                         "vidoza",
                         "turbovidplay",
                          "livetv",
-                         "deltabit",
                          "f16px",
                     ],
                     "examples": [

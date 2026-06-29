@@ -21,31 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cloudflare-warp \
     netcat-openbsd \
     ffmpeg \
-    xvfb \
-    xdotool \
-    fluxbox \
-    xauth \
-    python3-tk \
-    python3-dev \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libasound2 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libatspi2.0-0 \
-    libxshmfence1 \
-    libglu1-mesa \
     ca-certificates \
-    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Optional userspace WARP tools. They allow WARP as a local SOCKS5 proxy
@@ -86,11 +62,7 @@ RUN set -eux; \
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# 3. Install Playwright Firefox (required by Camoufox)
-RUN python -m playwright install firefox
-
-# 4. Environment Settings
+# 3. Environment Settings
 ENV PYTHONPATH=/app
 
 # Copia esplicita
@@ -101,7 +73,7 @@ RUN chmod +x entrypoint.sh
 # 5. Metadata & Ports
 LABEL org.opencontainers.image.title="EasyProxy Monolith"
 LABEL org.opencontainers.image.description="All-in-one HLS Proxy with integrated CF Turnstile Solver"
-EXPOSE 7860 8191
+EXPOSE 7860
 VOLUME ["/data"]
 
 # 6. Execution

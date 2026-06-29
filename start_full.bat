@@ -18,7 +18,6 @@ set PYTHONUNBUFFERED=1
 echo Checking EasyProxy dependencies...
 python -m pip install -r requirements.txt --quiet
 python -m pip install pycryptodome --quiet
-python -m playwright install firefox
 
 :: --- 3. Start EasyProxy ---
 echo.
